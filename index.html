@@ -1,0 +1,104 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>HLS Stream</title>
+</head>
+<body>
+    <h1>RTSP to HLS Converter</h1>
+    <form id="streamForm">
+        <input type="text" id="rtsp_url" placeholder="RTSP URL" required>
+        <input type="text" id="stream_name" placeholder="Stream Name" required>
+        <button type="submit">Start Stream</button>
+    </form>
+    <div id="streams"></div>
+
+    <script src="https://cdn.jsdelivr.net/npm/hls.js@latest"></script>
+    <script>
+        const form = document.getElementById('streamForm');
+        const streamsDiv = document.getElementById('streams');
+
+        form.addEventListener('submit', async (event) => {
+            event.preventDefault();
+            const rtspUrl = document.getElementById('rtsp_url').value;
+            const streamName = document.getElementById('stream_name').value;
+
+            const response = await fetch('http://localhost:5000/start_stream', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({ rtsp_url: rtspUrl, stream_name: streamName })
+            });
+
+            if (response.ok) {
+                const data = await response.json();
+                await waitForStream(data.stream_name);
+                addStreamPlayer(data.stream_name);
+            } else {
+                alert('Failed to start stream');
+            }
+        });
+
+        async function waitForStream(streamName) {
+            const videoSrc = `http://localhost:5000/stream/${streamName}/index.m3u8`;
+            while (true) {
+                try {
+                    const response = await fetch(videoSrc, { method: 'HEAD' });
+                    if (response.ok) {
+                        return;
+                    }
+                } catch (error) {
+                    console.error('Error checking stream:', error);
+                }
+                await new Promise(resolve => setTimeout(resolve, 1000));
+            }
+        }
+
+        function addStreamPlayer(streamName) {
+            const video = document.createElement('video');
+            video.id = streamName;
+            video.controls = true;
+            video.autoplay = true;
+            video.style = 'width: 100%; height: auto;';
+            streamsDiv.appendChild(video);
+
+            const videoSrc = `http://localhost:5000/stream/${streamName}/index.m3u8`;
+
+            if (Hls.isSupported()) {
+                const hls = new Hls();
+                hls.loadSource(videoSrc);
+                hls.attachMedia(video);
+                hls.on(Hls.Events.MANIFEST_PARSED, function () {
+                    video.play();
+                });
+                hls.on(Hls.Events.ERROR, function (event, data) {
+                    if (data.fatal) {
+                        switch (data.type) {
+                            case Hls.ErrorTypes.NETWORK_ERROR:
+                                // try to recover network error
+                                console.error("fatal network error encountered, try to recover");
+                                hls.startLoad();
+                                break;
+                            case Hls.ErrorTypes.MEDIA_ERROR:
+                                console.error("fatal media error encountered, try to recover");
+                                hls.recoverMediaError();
+                                break;
+                            default:
+                                // cannot recover
+                                hls.destroy();
+                                break;
+                        }
+                    }
+                });
+            } else if (video.canPlayType('application/vnd.apple.mpegurl')) {
+                video.src = videoSrc;
+                video.addEventListener('canplay', function () {
+                    video.play();
+                });
+            }
+        }
+    </script>
+</body>
+</html>
