@@ -10,7 +10,7 @@ def convert_video(input_file, output_file):
 
 if __name__ == "__main__":
     # Path to the input video file (recorded from the camera RTSP stream)
-    input_file = 'camera1_20240530193028.mp4'
+    input_file = 'camera1_20240530193028.mp4' 
     # Path to the output video file
     output_file = 'converted_video.mp4'
     
